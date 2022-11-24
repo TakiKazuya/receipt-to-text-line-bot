@@ -31,12 +31,20 @@ post "/callback" do
 
       begin
         texts = image_to_texts(tempfile.path)
-        client.reply_message(e['replyToken'], {
-          type: 'text',
-          text: texts.join
-        })
-      rescue => e
-        puts e.message
+        print texts
+        amounts = extract_amounts(texts)
+        date = extract_date(texts)
+        messages = [
+          {
+            type: 'text', text: amounts.join("\n")
+          },
+          {
+            type: 'text', text: date.join("\n")
+          },
+        ]
+        client.reply_message(e['replyToken'], messages)
+      rescue => error
+        puts error.message
         client.reply_message(e['replyToken'], {
           type: 'text',
           text: "解析に失敗しました"
@@ -65,7 +73,7 @@ def client
 end
 
 # @param [String] image_path
-# @return [Array]
+# @return [Array<String>]
 def image_to_texts(image_path)
   image_annotator = Google::Cloud::Vision.image_annotator
 
@@ -84,9 +92,24 @@ def image_to_texts(image_path)
   result
 end
 
-
-# @param [Array] texts
+# @param [Array<String>] texts
 # @return [Array<String>]
 def extract_amounts(texts)
-  texts.filter{ |text| text.match?(/(¥|￥)\d{1,3}(?:,\d{3})+/)}
+  texts.map do |text|
+    regex = /(¥|￥)\d{1,3}(?:,\d{3})+/
+    text.split("\n").map do |str|
+      str.slice(regex) if text.match?(regex)
+    end
+  end.flatten.compact
+end
+
+# @param [Array<String>] texts
+# @return [Array<String>]
+def extract_date(texts)
+  texts.map do |text|
+    regex = /[0-9]{4}(\/|年)(0[1-9]|1[0-2])(\/|月)(0[1-9]|[12][0-9]|3[01])日?/
+    text.split("\n").map do |str|
+      str.slice(regex) if text.match?(regex)
+    end
+  end.flatten.compact
 end
